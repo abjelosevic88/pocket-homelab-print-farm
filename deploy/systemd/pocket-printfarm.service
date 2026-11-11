@@ -1,0 +1,23 @@
+[Unit]
+Description=Pocket Print Farm — your 3D printers in one place
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pocket-printfarm
+Group=pocket-printfarm
+ExecStart=/usr/local/bin/pocket-printfarm
+Environment=DATA_DIR=/var/lib/pocket-printfarm
+Environment=PORT=8080
+Environment=BASE_URL=https://printfarm.example.com
+Environment=SECURE_COOKIES=true
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pocket-printfarm
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
