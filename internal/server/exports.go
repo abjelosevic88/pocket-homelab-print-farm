@@ -368,5 +368,10 @@ func (s *Server) importDoc(ctx context.Context, uid int64, doc *exportDoc) (map[
 	for _, v := range added {
 		total += v
 	}
-	return map[string]any{"added": added, "text": fmt.Sprintf("%d %s brought in (the model files themselves come with a backup of the box)", total, plural(total, "thing", "things"))}, nil
+	out := map[string]any{"added": added, "imported": total}
+	for k, v := range added { // the counts at the top level too, for Pocket Move
+		out[k] = v
+	}
+	out["text"] = fmt.Sprintf("%d %s brought in (the model files themselves come with a backup of the box)", total, plural(total, "thing", "things"))
+	return out, nil
 }

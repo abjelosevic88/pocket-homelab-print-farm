@@ -22,6 +22,21 @@ var linkOffers = []core.Offer{
 }
 
 // linkRoute is one request a Pocket Core link token may make.
+// portable is what Pocket Move may copy out and bring in for a person
+// (docs/move.md in pocket-homelab-core); Register adds move:export/import.
+// The model files and photos themselves are not in the export (they come
+// with a backup of the box); their library rows are.
+var portable = &core.Portable{
+	Exports: []core.PortableExport{
+		{Path: "/api/v1/export.json", File: "printfarm.json", Kind: core.KindPocket, Title: "Your printers (without their keys), filaments and spools, model library, queue, prints and upkeep"},
+		{Path: "/api/v1/export.csv", File: "prints.csv", Kind: core.KindCSV, Title: "Every print with its time, filament and cost, as a table"},
+	},
+	Imports: []core.PortableImport{
+		{Path: "/api/v1/import", Kind: core.KindPocket, ContentType: "application/json", MaxBytes: 256 << 20, Title: "Adds the printers, filaments, spools, models, queue, prints and upkeep from another box; what is already here is left alone"},
+		{Path: "/api/v1/import/spoolman", Kind: "spoolman-json", ContentType: "application/json", MaxBytes: 64 << 20, Title: "Adds the spools and filaments of a Spoolman spool list (GET /api/v1/spool); spools already here are kept up to date, not added twice"},
+	},
+}
+
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -42,6 +57,9 @@ var errLinkScope = errors.New("outside the link's scope")
 
 // linkAllows reports whether a link token with these scopes may make this request.
 func linkAllows(scopes []string, r *http.Request) bool {
+	if portable.LinkAllows(scopes, r) {
+		return true
+	}
 	for _, lr := range linkRoutes {
 		if !strings.Contains(" "+lr.methods+" ", " "+r.Method+" ") || !lr.path.MatchString(r.URL.Path) {
 			continue

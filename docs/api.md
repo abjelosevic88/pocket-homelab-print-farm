@@ -95,7 +95,7 @@ Fail reasons: `adhesion, spaghetti, warping, clog, under_extrusion, layer_shift,
 
 ## Data
 
-`GET /export.json`, `POST /import` (the same file twice adds nothing twice), `GET /export.csv` (one row per print), `GET /backup` (admin: the whole database).
+`GET /export.json`, `POST /import` (the same file twice adds nothing twice), `GET /export.csv` (one row per print), `GET /backup` (admin: the whole database). `GET /pocket/portable`: Pocket Move can copy your farm out and bring it in, and a Spoolman spool list too (`move:export` / `move:import` links; the model files themselves come with a backup of the box).
 
 ## Events (Pocket Core)
 
