@@ -220,10 +220,12 @@ func (s *Server) registerWithCore(ctx context.Context) error {
 		Description: "Your 3D printers in one place: each printer's live state (Klipper/Moonraker, OctoPrint or PrusaLink — or by hand), the camera, temperatures and time left; a queue of what to print next, sent to a free printer with the right filament; a model library (STL, 3MF, OBJ, G-code) with a 3D view and what the slicer said (time, grams, settings); filament spools with what is left on each, taken off as prints finish, and an import from Spoolman; every print kept with how it went, why it failed and the settings that worked; what each print cost (filament, power, wear) and a price to sell it at; upkeep by print hours; stats. Links to Pocket Files, Inventory, Money, Invoicing, Contacts, Tasks, Calendar, Chat, Parcels, Projects and Alerts; Pocket AI helps when a print fails.",
 		Icon:        "/favicon.svg", Version: Version,
 		URL: s.cfg.CoreAppURL, PublicURL: s.cfg.BaseURL, HealthPath: "/healthz", EnvPrefix: "PRINTFARM",
-		Publishes: eventTopics,
-		Offers:    linkOffers,
-		Portable:  portable,
-		Uses:      append(linkUses(), core.InferenceUse()),
+		Category:     "Tools",
+		Publishes:    eventTopics,
+		Offers:       linkOffers,
+		Portable:     portable,
+		Capabilities: capabilities,
+		Uses:         append(linkUses(), core.InferenceUse()),
 	}
 	if s.cfg.BaseURL != "" {
 		m.OIDC = &core.OIDCRequest{RedirectURIs: []string{s.oidcCallbackURL()}}

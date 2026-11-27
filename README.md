@@ -98,6 +98,8 @@ All optional, each switched on per person (Pocket Core → Links, or directly wi
 
 Print Farm offers `printfarm:read` and `printfarm:write` to the rest of the box (Pocket Day, Search, AI — “how long until the vase is done?”, “queue two phone stands in black PETG”; a link never starts or stops a printer), and publishes `printfarm.print_started`, `print_finished`, `print_failed`, `job_added`, `job_done`, `spool_low`, `upkeep_due`, `model_added`.
 
+Pocket Search, Pocket Day and Pocket Hub find Print Farm on their own, with nothing to set up in any of them: your models, printers, filament, prints and queued jobs turn up in Search (`!printfarm vase`, `!3d`, `!print3d`), Hub shows a "Printers" widget with what each printer is doing now and what waits in the queue, and the day's prints are offered to the journal (Pocket Day keeps its own, fuller reading through `printfarm:read` for now). These only read; nothing in them starts, pauses or stops a print, and a quick line typed in Hub cannot be kept here, because a job needs a model and a print a printer. The routes are in [docs/api.md](docs/api.md#pocket-search-pocket-day-and-pocket-hub).
+
 ## Run it
 
 ```sh

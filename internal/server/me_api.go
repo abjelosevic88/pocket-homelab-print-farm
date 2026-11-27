@@ -117,6 +117,29 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 		"low_filament": low, "url": s.link("/")})
 }
 
+// dayPrint is a print that belongs to a day: it ended then, or it started
+// then and is still going.
+type dayPrint struct {
+	store.Print
+	ended bool
+}
+
+// printsOn are a person's prints of the day that starts at t, newest first.
+func (s *Server) printsOn(ctx context.Context, uid int64, t time.Time) ([]dayPrint, error) {
+	from, to := t.UTC().Format(time.RFC3339Nano), t.AddDate(0, 0, 1).UTC().Format(time.RFC3339Nano)
+	recent, _, err := s.store.ListPrints(ctx, uid, store.PrintFilter{From: t.AddDate(0, 0, -3).UTC().Format(time.RFC3339Nano), To: to, Limit: 500})
+	out := []dayPrint{}
+	for _, p := range recent {
+		ended := p.EndedAt != nil && *p.EndedAt >= from && *p.EndedAt < to
+		started := p.StartedAt >= from && p.StartedAt < to
+		if !ended && !(started && p.EndedAt == nil) {
+			continue
+		}
+		out = append(out, dayPrint{Print: p, ended: ended})
+	}
+	return out, err
+}
+
 // handleDay is what was printed on one day, for Pocket Day's journal.
 func (s *Server) handleDay(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -127,17 +150,12 @@ func (s *Server) handleDay(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "a day is YYYY-MM-DD")
 		return
 	}
-	from, to := t.UTC().Format(time.RFC3339Nano), t.AddDate(0, 0, 1).UTC().Format(time.RFC3339Nano)
 	items := []map[string]any{}
 	// prints that ended (or started and are still going) that day
-	recent, _, _ := s.store.ListPrints(ctx, uid, store.PrintFilter{From: t.AddDate(0, 0, -3).UTC().Format(time.RFC3339Nano), To: to, Limit: 500})
 	done, failed, secs, grams := 0, 0, 0, 0.0
-	for _, p := range recent {
-		ended := p.EndedAt != nil && *p.EndedAt >= from && *p.EndedAt < to
-		started := p.StartedAt >= from && p.StartedAt < to
-		if !ended && !(started && p.EndedAt == nil) {
-			continue
-		}
+	prints, _ := s.printsOn(ctx, uid, t)
+	for _, dp := range prints {
+		p, ended := dp.Print, dp.ended
 		var txt string
 		switch p.Status {
 		case "done":
@@ -185,6 +203,62 @@ func (s *Server) handleDay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"date": day, "items": items, "done": done, "failed": failed, "hours": round1(float64(secs) / 3600), "grams": math.Round(grams)})
 }
 
+// found is what a person's words match: models (and their files), printers
+// (the put-away ones too), filaments, prints and the jobs still open. Each
+// list is at most as long as the limit asked for.
+type found struct {
+	models    []store.Model
+	printers  []store.Printer
+	filaments []store.Filament
+	prints    []store.Print
+	jobs      []store.Job
+}
+
+// find looks a person's words up in everything of theirs. It keeps going
+// when one list cannot be read and returns the first error with the rest.
+func (s *Server) find(ctx context.Context, uid int64, q string, lim int) (found, error) {
+	var f found
+	var first error
+	keep := func(err error) {
+		if first == nil {
+			first = err
+		}
+	}
+	low := strings.ToLower(q)
+	var err error
+	f.models, _, err = s.store.ListModels(ctx, uid, store.ModelFilter{Q: q, Limit: lim})
+	keep(err)
+	printers, err := s.store.ListPrinters(ctx, uid, true)
+	keep(err)
+	for _, p := range printers {
+		if len(f.printers) < lim && strings.Contains(strings.ToLower(p.Name+" "+p.Model+" "+p.Location), low) {
+			f.printers = append(f.printers, p)
+		}
+	}
+	fils, err := s.store.ListFilaments(ctx, uid)
+	keep(err)
+	for _, x := range fils {
+		if len(f.filaments) < lim && strings.Contains(strings.ToLower(x.Brand+" "+x.Material+" "+x.Name), low) {
+			f.filaments = append(f.filaments, x)
+		}
+	}
+	f.prints, _, err = s.store.ListPrints(ctx, uid, store.PrintFilter{Q: q, Limit: lim})
+	keep(err)
+	jobs, err := s.store.ListJobs(ctx, uid, "queued", "printing")
+	keep(err)
+	for _, j := range jobs {
+		if len(f.jobs) < lim && strings.Contains(strings.ToLower(j.Title+" "+j.ForWhom+" "+j.Notes), low) {
+			f.jobs = append(f.jobs, j)
+		}
+	}
+	return f, first
+}
+
+// filamentName is a filament as lists call it: "Prusament PLA Galaxy Black".
+func filamentName(f store.Filament) string {
+	return strings.TrimSpace(f.Brand + " " + f.Material + " " + f.Name)
+}
+
 // handleSearch finds models (and their files), printers, filaments and prints.
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -196,37 +270,26 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	lim := clampInt(firstPos(queryInt(r, "limit"), 20), 1, 50)
-	low := strings.ToLower(q)
 	hit := func(kind string, id int64, title, sub, path string) {
 		if len(hits) < lim {
 			hits = append(hits, map[string]any{"kind": kind, "id": id, "title": title, "subtitle": sub, "url": s.link(path), "path": path})
 		}
 	}
-	models, _, _ := s.store.ListModels(ctx, uid, store.ModelFilter{Q: q, Limit: lim})
-	for _, m := range models {
+	f, _ := s.find(ctx, uid, q, lim)
+	for _, m := range f.models {
 		hit("model", m.ID, m.Name, joinNonEmpty(" · ", m.Tags, m.Designer, fmt.Sprintf("%d printed", m.Prints)), fmt.Sprintf("/models/%d", m.ID))
 	}
-	printers, _ := s.store.ListPrinters(ctx, uid, true)
-	for _, p := range printers {
-		if strings.Contains(strings.ToLower(p.Name+" "+p.Model+" "+p.Location), low) {
-			hit("printer", p.ID, p.Name, joinNonEmpty(" · ", p.Model, p.Location), fmt.Sprintf("/printers/%d", p.ID))
-		}
+	for _, p := range f.printers {
+		hit("printer", p.ID, p.Name, joinNonEmpty(" · ", p.Model, p.Location), fmt.Sprintf("/printers/%d", p.ID))
 	}
-	fils, _ := s.store.ListFilaments(ctx, uid)
-	for _, f := range fils {
-		if strings.Contains(strings.ToLower(f.Brand+" "+f.Material+" "+f.Name), low) {
-			hit("filament", f.ID, strings.TrimSpace(f.Brand+" "+f.Material+" "+f.Name), fmt.Sprintf("%d spools, %d g left", f.Spools, int(f.LeftGrams)), "/filament")
-		}
+	for _, x := range f.filaments {
+		hit("filament", x.ID, filamentName(x), fmt.Sprintf("%d spools, %d g left", x.Spools, int(x.LeftGrams)), "/filament")
 	}
-	prints, _, _ := s.store.ListPrints(ctx, uid, store.PrintFilter{Q: q, Limit: lim})
-	for _, p := range prints {
+	for _, p := range f.prints {
 		hit("print", p.ID, p.Title, joinNonEmpty(" · ", localDay(p.StartedAt), p.Printer, p.Status), fmt.Sprintf("/prints/%d", p.ID))
 	}
-	jobs, _ := s.store.ListJobs(ctx, uid, "queued", "printing")
-	for _, j := range jobs {
-		if strings.Contains(strings.ToLower(j.Title+" "+j.ForWhom+" "+j.Notes), low) {
-			hit("job", j.ID, j.Title, fmt.Sprintf("in the queue, %d of %d", j.DoneCount, j.Quantity), "/queue")
-		}
+	for _, j := range f.jobs {
+		hit("job", j.ID, j.Title, fmt.Sprintf("in the queue, %d of %d", j.DoneCount, j.Quantity), "/queue")
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"hits": hits})
 }

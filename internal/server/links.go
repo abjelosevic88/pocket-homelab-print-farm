@@ -21,7 +21,6 @@ var linkOffers = []core.Offer{
 	{Scope: "printfarm:write", Name: "Add to your 3D printing", Description: "Add a print job to the queue (\"print two of the phone stand in black PETG\"), add a model from a file on the web, write down a print made, a spool bought or a spool weighed. Changes or removes only what that app added; never starts, pauses or stops a printer."},
 }
 
-// linkRoute is one request a Pocket Core link token may make.
 // portable is what Pocket Move may copy out and bring in for a person
 // (docs/move.md in pocket-homelab-core); Register adds move:export/import.
 // The model files and photos themselves are not in the export (they come
@@ -37,6 +36,18 @@ var portable = &core.Portable{
 	},
 }
 
+// capabilities is what Pocket Search, Pocket Day and Pocket Hub may ask Print
+// Farm (docs/capabilities.md in pocket-homelab-core); Register adds the
+// pocket:search/day/widget offers. All three only read. There is no quick
+// line to keep here: a job needs a model and its file, a print a printer.
+var capabilities = core.Capabilities{
+	Search: &core.Searchable{What: "Your 3D models and their files, printers, filament, prints and what waits in the queue",
+		Kinds: []string{"model", "printer", "filament", "print", "job"}, Bangs: []string{"printfarm", "3d", "print3d"}},
+	Day:    &core.DayFeed{Label: "Print Farm", One: "print", Many: "prints", What: "The prints that finished, failed or started that day"},
+	Widget: &core.Widget{Title: "Printers", What: "What each printer is doing now and what waits in the queue"},
+}
+
+// linkRoute is one request a Pocket Core link token may make.
 type linkRoute struct {
 	methods string
 	path    *regexp.Regexp
@@ -57,7 +68,7 @@ var errLinkScope = errors.New("outside the link's scope")
 
 // linkAllows reports whether a link token with these scopes may make this request.
 func linkAllows(scopes []string, r *http.Request) bool {
-	if portable.LinkAllows(scopes, r) {
+	if portable.LinkAllows(scopes, r) || capabilities.LinkAllows(scopes, r) {
 		return true
 	}
 	for _, lr := range linkRoutes {

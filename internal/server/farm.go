@@ -711,7 +711,11 @@ type printerView struct {
 	UpkeepDue  int              `json:"upkeep_due"`
 }
 
-func (s *Server) viewPrinter(ctx context.Context, p *store.Printer, upkeep []store.Upkeep) printerView {
+// printerNow is what a printer is doing: what it said when it was last asked
+// (the poller keeps that; nothing here goes to the printer), the print on it
+// with how far it is and how long it has left, and whether the bed still has
+// to be cleared.
+func (s *Server) printerNow(ctx context.Context, p *store.Printer) printerView {
 	v := printerView{Printer: *p, State: "manual"}
 	v.APIKey = ""
 	if connected(p) {
@@ -754,6 +758,11 @@ func (s *Server) viewPrinter(ctx context.Context, p *store.Printer, upkeep []sto
 	if v.NeedsClear && v.State == "idle" {
 		v.State = "done"
 	}
+	return v
+}
+
+func (s *Server) viewPrinter(ctx context.Context, p *store.Printer, upkeep []store.Upkeep) printerView {
+	v := s.printerNow(ctx, p)
 	if p.SpoolID != nil {
 		if sp, err := s.store.GetSpool(ctx, p.UserID, *p.SpoolID); err == nil {
 			v.Spool = sp

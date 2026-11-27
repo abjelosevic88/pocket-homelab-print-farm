@@ -73,6 +73,11 @@ func (s *Server) Router() http.Handler {
 				r.Get("/search", s.handleSearch)
 				r.Get("/stats", s.handleStats)
 
+				// the same for every Pocket app: Pocket Search, Day and Hub
+				r.Get("/pocket/search", core.SearchHandler(s.pocketSearch))
+				r.Get("/pocket/day/{date}", core.DayHandler(s.pocketDay))
+				r.Get("/pocket/widget", core.WidgetHandler(s.pocketWidget))
+
 				// printers
 				r.Get("/printers", s.handlePrinters)
 				r.Post("/printers", s.handleCreatePrinter)

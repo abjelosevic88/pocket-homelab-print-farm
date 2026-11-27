@@ -97,6 +97,18 @@ Fail reasons: `adhesion, spaghetti, warping, clog, under_extrusion, layer_shift,
 
 `GET /export.json`, `POST /import` (the same file twice adds nothing twice), `GET /export.csv` (one row per print), `GET /backup` (admin: the whole database). `GET /pocket/portable`: Pocket Move can copy your farm out and bring it in, and a Spoolman spool list too (`move:export` / `move:import` links; the model files themselves come with a backup of the box).
 
+## Pocket Search, Pocket Day and Pocket Hub
+
+Print Farm answers three of the routes every Pocket app can offer (`docs/capabilities.md` in Pocket Core), so Pocket Search, Pocket Day and Pocket Hub find it on their own. Each has its own link scope that opens that one route and nothing else; a signed-in person or a personal token can call them too. All three only read, and none goes to a printer: what a printer is doing is what Print Farm last heard from it. Addresses (`url`) are paths in the app.
+
+| Route | Scope | What |
+|---|---|---|
+| `GET /pocket/search?q&limit` | `pocket:search` | `{items}`: what `GET /search` finds, the closest first (a model, printer or filament of that name, then a job, then a print). Each has `id` (`model:3`, `printer:1`, `filament:2`, `print:40`, `job:7`), `title`, `snippet` ("home, gift · printed 42 times", "Prusa MK4 · Workshop", "2 spools, 975 g left", "Mk4 · Failed · came off the bed", "Waiting in the queue · for Ana"), `kind` (model, printer, filament, print, job), `date` and `url` (a job opens the queue, a filament the filament page). A `q` without a letter or a digit finds nothing |
+| `GET /pocket/day/{date}` | `pocket:day` | `{date, summary, items, metrics}`: the prints that ended that day and the ones started then that are still going (`?tz=` for the person's time zone, else the box's). `summary` is "3 prints finished, 1 failed". An item has `title`, `sub` (the printer; for a failed print also why), `kind` (printed, failed, stopped, printing), `time` and `end` (a print that ran over midnight: only the time it ended), `minutes`, `done` for a finished one, `note`, `url`. `metrics`: the print time and the filament used. Upkeep done and models added stay in `GET /day` |
+| `GET /pocket/widget` | `pocket:widget` | `{line, metrics, items, url}`: each printer now ("Printing Twisted vase · 39% · 2 h 30 min left", "Done, clear the bed", "Ready", "Not answering"), the printing ones first, then what waits in the queue ("In the queue · 2 to print · for Ana · by Fri 4 Dec"). `line` is "1 printing, 2 waiting in the queue", or empty when nothing prints and nothing waits. `metrics`: how many printers print, how many jobs wait, and the spools running low when there are any |
+
+There is no `POST /pocket/capture`: a job needs a model and its file, a print a printer, so a quick line cannot become either.
+
 ## Events (Pocket Core)
 
 `printfarm.print_started`, `print_finished`, `print_failed`, `job_added`, `job_done`, `spool_low`, `upkeep_due`, `model_added` — each with `user_email` and a `url`.
